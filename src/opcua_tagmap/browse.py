@@ -55,6 +55,13 @@ async def _walk(node, path: str, depth: int, state: dict) -> None:
         return
 
     for child in children:
+        # Namespace 0 is reserved for the OPC UA standard: the Server object
+        # alone carries ~250 diagnostic nodes (MaxSessions, ServerCapabilities,
+        # RedundancySupport...). Machine tags always live in ns>=1, so without
+        # this the real tags are buried. --include-standard opts back in.
+        if state["skip_standard"] and child.nodeid.NamespaceIndex == 0:
+            continue
+
         try:
             name = (await child.read_browse_name()).Name
             node_class = await child.read_node_class()
@@ -85,14 +92,19 @@ async def browse(endpoint: str,
                  root: str | None = None,
                  max_depth: int = DEFAULT_MAX_DEPTH,
                  max_nodes: int = DEFAULT_MAX_NODES,
-                 timeout: float = 10.0) -> BrowseResult:
+                 timeout: float = 10.0,
+                 skip_standard: bool = True) -> BrowseResult:
     """Collect every Variable under `root` (default: the Objects folder).
 
     `root` may be a NodeId string such as "ns=2;s=ProtectionPanel" to start
     part-way down a large server.
+
+    `skip_standard` drops the OPC UA standard namespace (ns=0), which is what
+    makes the output about the machine rather than about the server.
     """
     state = {"tags": [], "errors": [], "truncated": False,
-             "max_depth": max_depth, "max_nodes": max_nodes}
+             "max_depth": max_depth, "max_nodes": max_nodes,
+             "skip_standard": skip_standard}
 
     client = Client(url=endpoint, timeout=timeout)
     async with client:

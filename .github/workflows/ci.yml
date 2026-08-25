@@ -63,6 +63,23 @@ jobs:
           print(f"OK: {len(tags)} variables discovered")
           PY
 
+      # Counterpart to the step above: prove ns=0 exclusion is a real filter
+      # and not a coincidence of this server having exactly seven tags.
+      - name: --include-standard brings back the server's own tree
+        run: |
+          opcua-tagmap browse opc.tcp://127.0.0.1:4855/plc/ \
+            --include-standard --format json --out all.json
+          python - <<'PY'
+          import json
+          allt = json.load(open("all.json"))
+          machine = json.load(open("tags.json"))
+          assert len(allt) > 100, f"expected the ns=0 tree back, got {len(allt)}"
+          assert len(machine) == 7
+          assert any(t["namespace"] == 0 for t in allt)
+          assert not any(t["namespace"] == 0 for t in machine)
+          print(f"OK: {len(allt)} with ns=0, {len(machine)} without")
+          PY
+
       - name: Generated Telegraf config parses and carries every node
         run: |
           opcua-tagmap gen telegraf opc.tcp://127.0.0.1:4855/plc/ \

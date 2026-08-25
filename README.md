@@ -84,8 +84,16 @@ No `--include` means every variable on the server.
 |---|---|
 | `--root ns=2;s=Plant1` | start part-way down instead of at Objects |
 | `--max-depth`, `--max-nodes` | stop a huge server from running away |
+| `--include-standard` | also return the OPC UA standard namespace (see below) |
 | `--format text\|csv\|json` | `browse` output shape |
 | `--out FILE` | write to a file instead of stdout |
+
+**Namespace 0 is excluded by default.** Every OPC UA server exposes a standard
+`Server` object — roughly 250 diagnostic nodes like `MaxSessions`,
+`ServerCapabilities` and `RedundancySupport`. Browsing a small demo server
+raw returns 255 nodes, of which 7 are the machine. Since the standard
+namespace is always ns=0 and machine tags always live in ns≥1, ns=0 is dropped
+unless you ask for it with `--include-standard`.
 
 If a pattern matches nothing, the tool **exits non-zero and writes no file**,
 rather than handing you a valid-looking config that collects nothing.

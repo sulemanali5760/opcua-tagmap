@@ -24,6 +24,10 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-depth", type=int, default=DEFAULT_MAX_DEPTH)
     parser.add_argument("--max-nodes", type=int, default=DEFAULT_MAX_NODES)
     parser.add_argument("--timeout", type=float, default=10.0)
+    parser.add_argument("--include-standard", action="store_true",
+                        help="also include the OPC UA standard namespace "
+                             "(ns=0) — the server's own diagnostic tree, "
+                             "roughly 250 nodes, excluded by default")
     parser.add_argument("--out", default=None, help="write here instead of stdout")
 
 
@@ -31,7 +35,8 @@ def _collect(args):
     """Browse, filter, and fail loudly if nothing survived."""
     result = browse_sync(args.endpoint, root=args.root,
                          max_depth=args.max_depth, max_nodes=args.max_nodes,
-                         timeout=args.timeout)
+                         timeout=args.timeout,
+                         skip_standard=not args.include_standard)
 
     for err in result.errors:
         print(f"warning: could not browse {err}", file=sys.stderr)
