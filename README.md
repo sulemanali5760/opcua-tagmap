@@ -61,6 +61,34 @@ opcua-tagmap gen telegraf opc.tcp://192.168.0.10:4840 \
   --out telegraf.conf
 ```
 
+Scaffold acceptance tests for a whole panel:
+
+```bash
+opcua-tagmap gen testcases opc.tcp://192.168.0.10:4840 \
+  --include 'Objects/ProtectionPanel/*' \
+  --out-dir test_cases/
+```
+
+```
+skipped ContactorState: String - a min/max spec cannot express it
+skipped FaultFlag: Boolean - a min/max spec cannot express it
+wrote 5 stub(s) to test_cases/
+every stub needs a limit before it means anything: uncomment min/max and fill in the real number.
+```
+
+One YAML file per numeric tag, in the format
+[opc-ua-test-automation-pipeline](https://github.com/sulemanali5760/opc-ua-test-automation-pipeline)
+reads. On a machine with a hundred tags, this turns *write a hundred files*
+into *delete the eighty-five you do not care about and fill in fifteen numbers*.
+
+**It never guesses a limit.** A generated stub has `min` and `max` commented
+out, so it cannot pass or fail until someone opens a datasheet and types the
+real number. An invented limit produces a test that passes for no reason,
+which is worse than having no test.
+
+Re-running is safe: files that already exist are left alone, so adding a tag
+next month gives you only the new stubs. `--overwrite` forces the issue.
+
 Export the inventory for a commissioning document:
 
 ```bash
