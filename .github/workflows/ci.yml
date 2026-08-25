@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Unit tests
+        run: pytest -q
+
+      # Everything above runs without a server. The steps below prove the
+      # whole chain against a real OPC UA server with a known address space.
+      - name: Start simulated PLC
+        run: |
+          python -u tests/fixtures/sim_plc_server.py > sim.log 2>&1 &
+          echo $! > sim.pid
+          # Wait on the port, not on a log line: the banner prints before the
+          # server listens, so the banner proves nothing.
+          if ! python - <<'PY'
+          import socket, sys, time
+          for _ in range(60):
+              try:
+                  with socket.create_connection(("127.0.0.1", 4855), timeout=1):
+                      print("simulator accepting connections")
+                      sys.exit(0)
+              except OSError:
+                  time.sleep(1)
+          sys.exit("simulator never opened port 4855")
+          PY
+          then
+            echo "--- sim.log ---"; cat sim.log; exit 1
+          fi
+
+      - name: Browse finds exactly the seven known variables
+        run: |
+          opcua-tagmap browse opc.tcp://127.0.0.1:4855/plc/ \
+            --format json --out tags.json
+          python - <<'PY'
+          import json
+          tags = json.load(open("tags.json"))
+          names = sorted(t["display_name"] for t in tags)
+          expected = sorted(["CoilVoltage_V", "CurrentDraw_A", "CycleTime_ms",
+                             "Temperature_C", "Pressure_mbar",
+                             "ContactorState", "FaultFlag"])
+          assert names == expected, f"got {names}"
+          panel = [t for t in tags if "ProtectionPanel" in t["browse_path"]]
+          assert len(panel) == 7, panel
+          print(f"OK: {len(tags)} variables discovered")
+          PY
+
+      - name: Generated Telegraf config parses and carries every node
+        run: |
+          opcua-tagmap gen telegraf opc.tcp://127.0.0.1:4855/plc/ \
+            --out telegraf.conf
+          cat telegraf.conf
+          python - <<'PY'
+          import tomllib
+          cfg = tomllib.load(open("telegraf.conf", "rb"))
+          inp = cfg["inputs"]["opcua"][0]
+          assert inp["endpoint"] == "opc.tcp://127.0.0.1:4855/plc/"
+          nodes = inp["nodes"]
+          assert len(nodes) == 7, f"expected 7 nodes, got {len(nodes)}"
+          assert all(n["namespace"] and n["identifier"] for n in nodes)
+          print("OK: telegraf config is valid TOML with 7 nodes")
+          PY
+
+      - name: Glob filter selects exactly the four C* tags
+        run: |
+          opcua-tagmap browse opc.tcp://127.0.0.1:4855/plc/ \
+            --include 'Objects/ProtectionPanel/C*' --format json --out c.json
+          python - <<'PY'
+          import json
+          names = sorted(t["display_name"] for t in json.load(open("c.json")))
+          expected = ["CoilVoltage_V", "ContactorState", "CurrentDraw_A",
+                      "CycleTime_ms"]
+          assert names == sorted(expected), f"got {names}"
+          print("OK: glob filter selected exactly 4")
+          PY
+
+      # Negative control. A generator that always emitted output would pass
+      # every test above; this is what stops it silently collecting nothing.
+      - name: A pattern matching nothing must fail, not emit empty config
+        run: |
+          if opcua-tagmap gen telegraf opc.tcp://127.0.0.1:4855/plc/ \
+               --include 'Objects/NoSuchMachine/*' --out empty.conf; then
+            echo "FAIL: exited 0 for a pattern that matches nothing"
+            exit 1
+          fi
+          if [ -f empty.conf ]; then
+            echo "FAIL: wrote a config file despite matching nothing"
+            exit 1
+          fi
+          echo "OK: refused to emit an empty config"
+
+      - name: Stop simulator
+        if: always()
+        run: kill "$(cat sim.pid)" 2>/dev/null || true
+
+      - name: Upload generated config
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-config
+          path: |
+            telegraf.conf
+            tags.json
+          if-no-files-found: warn
