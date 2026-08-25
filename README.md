@@ -32,8 +32,11 @@ products sell a "tag browser" as a headline feature. The open stack has none.
 ## Install
 
 ```bash
-pip install opcua-tagmap
+pip install git+https://github.com/sulemanali5760/opcua-tagmap
 ```
+
+Not on PyPI yet — that install line becomes `pip install opcua-tagmap`
+once the first release is published.
 
 ## Use
 
