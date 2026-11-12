@@ -40,14 +40,14 @@ async def _read_datatype(node) -> str:
         return "Unknown"
 
 
-async def _walk(node, path: str, depth: int, state: dict) -> None:
+async def _walk(node, path: str, depth: int, state: dict, refs=ua.ObjectIds.HierarchicalReferences) -> None:
     if depth > state["max_depth"] or len(state["tags"]) >= state["max_nodes"]:
         if len(state["tags"]) >= state["max_nodes"]:
             state["truncated"] = True
         return
 
     try:
-        children = await node.get_children()
+        children = await node.get_children(refs=refs)
     except Exception as e:
         # A permission error part-way down a real server must not abort the
         # whole browse — record it and carry on with the rest of the tree.
@@ -84,6 +84,10 @@ async def _walk(node, path: str, depth: int, state: dict) -> None:
                 identifier=str(nid.Identifier),
                 datatype=await _read_datatype(child),
             ))
+            # A structured variable carries its members as component variables (this is how an
+            # S7-1500 or a CODESYS controller exposes a STRUCT or an array of STRUCT). Follow
+            # HasComponent only: properties such as EURange describe the variable, they are not tags.
+            await _walk(child, child_path, depth + 1, state, refs=ua.ObjectIds.HasComponent)
         elif node_class == ua.NodeClass.Object:
             await _walk(child, child_path, depth + 1, state)
 

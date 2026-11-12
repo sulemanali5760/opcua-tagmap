@@ -3,11 +3,11 @@
 [![CI](https://github.com/sulemanali5760/opcua-tagmap/actions/workflows/ci.yml/badge.svg)](https://github.com/sulemanali5760/opcua-tagmap/actions/workflows/ci.yml)
 
 Browse an OPC UA server, filter the tags you want with glob patterns, and get
-collector configuration you can paste straight into Telegraf.
+a tag inventory (CSV/JSON), a static Telegraf config, or test-case stubs.
 
 It does not collect, store or display anything — Telegraf, InfluxDB, Grafana,
-ThingsBoard and Node-RED already do that well. This fills the gap *before* them:
-turning a PLC's address space into their config without typing it by hand.
+ThingsBoard and Node-RED already do that well. This works *before* them:
+turning a PLC's address space into files you can read, review and version.
 
 ## The problem
 
@@ -24,10 +24,26 @@ Pointing any IIoT collector at a real machine means enumerating every node:
 ```
 
 Telegraf's own issue [#18529](https://github.com/influxdata/telegraf/issues/18529)
-calls browse-based discovery *"one of the most requested features for
+called browse-based discovery *"one of the most requested features for
 large-scale OPC-UA deployments"*. ThingsBoard users hit the same wall
-([#9594](https://github.com/thingsboard/thingsboard/issues/9594)). Commercial
-products sell a "tag browser" as a headline feature. The open stack has none.
+([#9594](https://github.com/thingsboard/thingsboard/issues/9594)).
+
+### Telegraf has this built in now
+
+That issue was closed in May 2026: Telegraf merged browse-based discovery with
+glob patterns (`[inputs.opcua.browse]`, pull request
+[#18831](https://github.com/influxdata/telegraf/pull/18831)); releases from
+1.39.0 (June 2026) on were published after that merge. **If you run a current
+Telegraf and want it to discover nodes by itself at start-up, use that, not this tool.**
+
+What `opcua-tagmap` is still for:
+
+- **A static config you can review.** The generated file lists every node, so a
+  change on the PLC shows up as a diff in version control instead of silently
+  changing what is collected.
+- **Older Telegraf versions** that do not have the browse section.
+- **A tag inventory** as CSV or JSON for commissioning documents, independent of any collector.
+- **Test-case stubs** for acceptance tests (below).
 
 ## Install
 
@@ -95,6 +111,20 @@ Export the inventory for a commissioning document:
 opcua-tagmap browse opc.tcp://192.168.0.10:4840 --format csv --out tags.csv
 ```
 
+## Names in the Telegraf output
+
+Telegraf rejects a config in which two nodes share a name, and plants reuse
+names all the time (every control loop has a `PV`). A name that occurs more
+than once gets its parent in front: `PV` becomes `TIC101_PV` and `TI102_PV`;
+names that are already unique are left alone.
+
+## Structured variables
+
+Members of a structured variable are listed too (`Recipe/Setpoint`,
+`Recipe/Duration`): this is how controllers expose a STRUCT. Properties that
+only describe a variable, such as `EURange` or `EngineeringUnits`, are not tags
+and are left out.
+
 ## Glob patterns
 
 Matched against the browse path, and segment-aware — `*` stops at a `/`:
@@ -146,6 +176,16 @@ with a known address space, asserting that a browse finds exactly its seven
 variables, that the generated TOML parses and carries all seven NodeIds, that
 `Objects/ProtectionPanel/C*` selects exactly four, and that a pattern matching
 nothing fails instead of writing an empty config.
+
+A second test server, started inside `pytest`, covers what the panel simulator
+does not have: two objects with a variable of the same name, and a structured
+variable with member variables and a property.
+
+**No security yet.** The tool connects anonymously without encryption, and the
+generated Telegraf block says so (`security_policy = "None"`). A server that
+only accepts encrypted or logged-in sessions cannot be browsed with it; to find
+out what such a server wants, see
+[opcua-doctor](https://github.com/sulemanali5760/opcua-doctor).
 
 **Not yet verified against a real PLC.** The simulator is
 [`asyncua`](https://github.com/FreeOpcUa/opcua-asyncio)-based and well behaved;

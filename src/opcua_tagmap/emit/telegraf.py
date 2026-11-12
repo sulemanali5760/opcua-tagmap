@@ -31,14 +31,35 @@ def _toml_escape(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def field_names(tags: list[TagNode]) -> list[str]:
+    """One Telegraf field name per tag, unique within the block.
+
+    Telegraf refuses a config in which two nodes share a name. Plants reuse names all the time
+    (every control loop has a PV), so a name that occurs more than once gets its parents in front:
+    PV -> TIC101_PV, and the whole path below Objects if that is still not unique.
+    """
+    def tail(tag: TagNode, n: int) -> str:
+        parts = tag.browse_path.split("/")
+        parts = parts[1:] if len(parts) > 1 else parts          # drop the leading "Objects"
+        return "_".join(parts[-n:] if n else parts)
+
+    names = [t.display_name for t in tags]
+    for n in (2, 3, 0):
+        counts = {x: names.count(x) for x in set(names)}
+        if all(c == 1 for c in counts.values()):
+            break
+        names = [tail(t, n) if counts[name] > 1 else name for t, name in zip(tags, names)]
+    return names
+
+
 def render(tags: list[TagNode], endpoint: str, name: str = "opcua") -> str:
     """Build a complete, paste-able Telegraf input block."""
     out = [_HEADER.format(count=len(tags), endpoint=_toml_escape(endpoint),
                           name=_toml_escape(name))]
 
-    for tag in tags:
+    for tag, field in zip(tags, field_names(tags)):
         out.append(_NODE.format(
-            name=_toml_escape(tag.display_name),
+            name=_toml_escape(field),
             namespace=tag.namespace,
             identifier_type=tag.identifier_type,
             identifier=_toml_escape(tag.identifier),

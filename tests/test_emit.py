@@ -63,3 +63,24 @@ def test_text_renders_one_line_per_tag():
 
 def test_text_of_nothing_is_empty_not_a_crash():
     assert table.to_text([]) == ""
+
+
+# --- names must be unique: Telegraf rejects a config with two nodes of the same name ----------
+
+def test_repeated_names_get_their_parent_in_front():
+    tags = [TagNode("Objects/Plant/TIC101/PV", "PV", 2, "s", "TIC101.PV", "Double"),
+            TagNode("Objects/Plant/TI102/PV", "PV", 2, "s", "TI102.PV", "Double"),
+            TagNode("Objects/Plant/TIC101/SP", "SP", 2, "s", "TIC101.SP", "Double")]
+    assert telegraf.field_names(tags) == ["TIC101_PV", "TI102_PV", "SP"]
+    nodes = tomllib.loads(telegraf.render(tags, "opc.tcp://plc:4840"))["inputs"]["opcua"][0]["nodes"]
+    assert len({n["name"] for n in nodes}) == 3
+
+
+def test_names_stay_unique_when_the_parent_repeats_too():
+    tags = [TagNode("Objects/Line1/Pump/Speed", "Speed", 2, "s", "a", "Double"),
+            TagNode("Objects/Line2/Pump/Speed", "Speed", 2, "s", "b", "Double")]
+    assert telegraf.field_names(tags) == ["Line1_Pump_Speed", "Line2_Pump_Speed"]
+
+
+def test_unique_names_are_left_alone():
+    assert telegraf.field_names(TAGS) == ["CoilVoltage_V", "ContactorState", "Count"]
