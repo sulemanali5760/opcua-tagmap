@@ -47,12 +47,22 @@ What `opcua-tagmap` is still for:
 
 ## Install
 
+With internet:
+
 ```bash
-pip install git+https://github.com/sulemanali5760/opcua-tagmap
+pip install https://github.com/sulemanali5760/opcua-tagmap/releases/download/v0.2.0/opcua_tagmap-0.2.0-py3-none-any.whl
 ```
 
-Not on PyPI yet — that install line becomes `pip install opcua-tagmap`
-once the first release is published.
+Without internet (a plant PC, a commissioning laptop on the machine network): download the offline bundle
+for your system from the [latest release](https://github.com/sulemanali5760/opcua-tagmap/releases/latest), carry
+it over on a USB stick, unzip it and run inside the folder:
+
+```bash
+python -m pip install --no-index --find-links . opcua-tagmap
+```
+
+The bundle holds this tool and every package it needs; nothing is downloaded. Each bundle is installed in a
+clean environment and started once before it is published. Python 3.11 or newer. Not on PyPI yet.
 
 ## Use
 
