@@ -1,6 +1,6 @@
 # opcua-tagmap
 
-[![CI](https://github.com/sulemanali5760/opcua-tagmap/actions/workflows/ci.yml/badge.svg)](https://github.com/sulemanali5760/opcua-tagmap/actions/workflows/ci.yml)
+[![CI](https://github.com/sulemanali5760/opcua-tagmap/actions/workflows/ci.yml/badge.svg)](https://github.com/sulemanali5760/opcua-tagmap/actions/workflows/ci.yml) [![PyPI](https://img.shields.io/pypi/v/opcua-tagmap)](https://pypi.org/project/opcua-tagmap/)
 
 Browse an OPC UA server, filter the tags you want with glob patterns, and get
 a tag inventory (CSV/JSON), a static Telegraf config, or test-case stubs.
@@ -47,10 +47,8 @@ What `opcua-tagmap` is still for:
 
 ## Install
 
-With internet:
-
 ```bash
-pip install https://github.com/sulemanali5760/opcua-tagmap/releases/download/v0.2.0/opcua_tagmap-0.2.0-py3-none-any.whl
+pip install opcua-tagmap
 ```
 
 Without internet (a plant PC, a commissioning laptop on the machine network): download the offline bundle
@@ -62,7 +60,7 @@ python -m pip install --no-index --find-links . opcua-tagmap
 ```
 
 The bundle holds this tool and every package it needs; nothing is downloaded. Each bundle is installed in a
-clean environment and started once before it is published. Python 3.11 or newer. Not on PyPI yet.
+clean environment and started once before it is published. Python 3.11 or newer.
 
 ## Use
 
