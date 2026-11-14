@@ -4,6 +4,10 @@ Pure: takes a list of TagNode, returns text. No network, no files.
 """
 
 from ..model import TagNode
+from ..security import PASSWORD_ENV, Security
+
+# Telegraf's OPC UA input knows only these secure policies.
+TELEGRAF_POLICIES = ("Basic256Sha256",)
 
 # Telegraf reads these as strings even though they are numbers/enums.
 _HEADER = """\
@@ -13,6 +17,9 @@ _HEADER = """\
   endpoint = "{endpoint}"
   connect_timeout = "10s"
   request_timeout = "5s"
+{security}"""
+
+_ANONYMOUS = """\
   security_policy = "None"
   security_mode = "None"
   auth_method = "Anonymous"
@@ -52,10 +59,40 @@ def field_names(tags: list[TagNode]) -> list[str]:
     return names
 
 
-def render(tags: list[TagNode], endpoint: str, name: str = "opcua") -> str:
+def _security(sec: Security | None) -> str:
+    if sec is None or (not sec.secure_channel and not sec.username):
+        return _ANONYMOUS
+    lines = []
+    if sec.secure_channel:
+        if sec.policy not in TELEGRAF_POLICIES:
+            raise ValueError(f"Telegraf does not support security policy {sec.policy}; "
+                             f"use one of {', '.join(TELEGRAF_POLICIES)}")
+        lines += [f'  security_policy = "{sec.policy}"',
+                  f'  security_mode = "{sec.mode}"',
+                  "  ## Telegraf creates this key pair on first start (PEM). The server must trust",
+                  "  ## the certificate, as it trusts the one opcua-tagmap used for browsing.",
+                  '  certificate = "/etc/telegraf/opcua/cert.pem"',
+                  '  private_key = "/etc/telegraf/opcua/key.pem"']
+        if sec.server_cert:
+            lines.append("  ## Pin the server certificate (PEM; convert a .der file with openssl x509 -inform der)")
+            lines.append(f'  # remote_certificate = "{_toml_escape(sec.server_cert)}"')
+    else:
+        lines += ['  security_policy = "None"', '  security_mode = "None"']
+    if sec.username:
+        lines += ['  auth_method = "UserName"',
+                  f'  username = "{_toml_escape(sec.username)}"',
+                  f"  ## Telegraf reads the password from the environment, never from this file",
+                  f'  password = "${{{PASSWORD_ENV}}}"']
+    else:
+        lines.append('  auth_method = "Anonymous"')
+    return "\n".join(lines) + "\n"
+
+
+def render(tags: list[TagNode], endpoint: str, name: str = "opcua",
+           security: Security | None = None) -> str:
     """Build a complete, paste-able Telegraf input block."""
     out = [_HEADER.format(count=len(tags), endpoint=_toml_escape(endpoint),
-                          name=_toml_escape(name))]
+                          name=_toml_escape(name), security=_security(security))]
 
     for tag, field in zip(tags, field_names(tags)):
         out.append(_NODE.format(

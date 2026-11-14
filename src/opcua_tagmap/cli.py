@@ -11,6 +11,7 @@ from pathlib import Path
 from .browse import DEFAULT_MAX_DEPTH, DEFAULT_MAX_NODES, browse_sync
 from .emit import table, telegraf, testcases
 from .globmatch import filter_tags
+from .security import MODES, PASSWORD_ENV, POLICIES, from_args
 
 
 def _add_common(parser: argparse.ArgumentParser, with_out: bool = True) -> None:
@@ -28,6 +29,15 @@ def _add_common(parser: argparse.ArgumentParser, with_out: bool = True) -> None:
                         help="also include the OPC UA standard namespace "
                              "(ns=0) — the server's own diagnostic tree, "
                              "roughly 250 nodes, excluded by default")
+    sec = parser.add_argument_group("security")
+    sec.add_argument("--security-policy", choices=POLICIES, default="None")
+    sec.add_argument("--security-mode", choices=MODES, default="SignAndEncrypt")
+    sec.add_argument("--cert-dir", default="pki", metavar="DIR",
+                     help="client certificate folder; a self-signed one is created on first use")
+    sec.add_argument("--server-cert", default=None, metavar="FILE",
+                     help="the server's certificate (.der); without it the server identity is not checked")
+    sec.add_argument("--user", default=None,
+                     help=f"user name for login; the password is read from {PASSWORD_ENV}")
     if with_out:
         parser.add_argument("--out", default=None,
                             help="write here instead of stdout")
@@ -38,7 +48,8 @@ def _collect(args):
     result = browse_sync(args.endpoint, root=args.root,
                          max_depth=args.max_depth, max_nodes=args.max_nodes,
                          timeout=args.timeout,
-                         skip_standard=not args.include_standard)
+                         skip_standard=not args.include_standard,
+                         security=from_args(args))
 
     for err in result.errors:
         print(f"warning: could not browse {err}", file=sys.stderr)
@@ -140,7 +151,12 @@ def main(argv=None) -> int:
     elif args.target == "testcases":
         return _write_testcases(tags, args)
     else:
-        _write(telegraf.render(tags, args.endpoint, args.input_name), args.out)
+        try:
+            text = telegraf.render(tags, args.endpoint, args.input_name, from_args(args))
+        except ValueError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        _write(text, args.out)
 
     print(f"{len(tags)} node(s)", file=sys.stderr)
     return 0

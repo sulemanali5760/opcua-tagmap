@@ -156,6 +156,34 @@ No `--include` means every variable on the server.
 | `--include-standard` | also return the OPC UA standard namespace (see below) |
 | `--format text\|csv\|json` | `browse` output shape |
 | `--out FILE` | write to a file instead of stdout |
+| `--security-policy`, `--security-mode` | secure channel, e.g. `Basic256Sha256` + `SignAndEncrypt` |
+| `--cert-dir DIR` | client certificate folder (default `pki`); created on first use |
+| `--server-cert FILE` | the server's certificate (.der), so its identity is checked |
+| `--user NAME` | log in; the password comes from the `OPCUA_PASSWORD` environment variable |
+
+## Secured servers
+
+Most production servers (an S7-1500 with security on, for one) refuse
+anonymous, unencrypted sessions. Browse them like this:
+
+```bash
+export OPCUA_PASSWORD='...'          # never on the command line
+opcua-tagmap browse opc.tcp://plc:4840 \
+  --security-policy Basic256Sha256 --security-mode SignAndEncrypt \
+  --server-cert plc_cert.der --user operator
+```
+
+On first use the tool creates `pki/client_cert.der`. The server rejects it
+(`BadCertificateUntrusted`) until someone moves it to the server's trusted
+list; that is the server's protection working, not a bug.
+
+`gen telegraf` with the same flags writes a block with the matching security
+settings, `auth_method = "UserName"` and `password = "${OPCUA_PASSWORD}"`, so
+the password stays out of the file. Telegraf creates its own key pair on first
+start; the server must trust that certificate too. Telegraf's OPC UA input only
+supports `Basic256Sha256` among the current policies, so the tool refuses to
+write a config for the `Aes*` policies instead of writing one that cannot
+connect.
 
 **Namespace 0 is excluded by default.** Every OPC UA server exposes a standard
 `Server` object — roughly 250 diagnostic nodes like `MaxSessions`,
@@ -189,10 +217,11 @@ A second test server, started inside `pytest`, covers what the panel simulator
 does not have: two objects with a variable of the same name, and a structured
 variable with member variables and a property.
 
-**No security yet.** The tool connects anonymously without encryption, and the
-generated Telegraf block says so (`security_policy = "None"`). A server that
-only accepts encrypted or logged-in sessions cannot be browsed with it; to find
-out what such a server wants, see
+A third test server accepts only `Basic256Sha256` + `SignAndEncrypt` with a user
+login: the tool browses it with certificate and login, is refused without them
+(`No matching endpoints`) and with a wrong password (`BadUserAccessDenied`), and
+the Telegraf block it writes for that server parses and holds no password. If a
+secured server refuses you and the reason is unclear, see
 [opcua-doctor](https://github.com/sulemanali5760/opcua-doctor).
 
 **Not yet verified against a real PLC.** The simulator is

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "opcua-tagmap"
-version = "0.2.0"
+version = "0.3.0"
 description = "Browse an OPC UA server and generate a tag inventory, a static Telegraf config or test-case stubs"
 readme = "README.md"
 requires-python = ">=3.11"

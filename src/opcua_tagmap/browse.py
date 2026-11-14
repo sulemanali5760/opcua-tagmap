@@ -10,6 +10,7 @@ from typing import Iterable
 from asyncua import Client, ua
 
 from .model import TagNode
+from .security import Security, apply
 
 DEFAULT_MAX_DEPTH = 12
 DEFAULT_MAX_NODES = 10_000
@@ -97,7 +98,8 @@ async def browse(endpoint: str,
                  max_depth: int = DEFAULT_MAX_DEPTH,
                  max_nodes: int = DEFAULT_MAX_NODES,
                  timeout: float = 10.0,
-                 skip_standard: bool = True) -> BrowseResult:
+                 skip_standard: bool = True,
+                 security: Security | None = None) -> BrowseResult:
     """Collect every Variable under `root` (default: the Objects folder).
 
     `root` may be a NodeId string such as "ns=2;s=ProtectionPanel" to start
@@ -111,6 +113,7 @@ async def browse(endpoint: str,
              "skip_standard": skip_standard}
 
     client = Client(url=endpoint, timeout=timeout)
+    await apply(client, security or Security())
     async with client:
         if root:
             start = client.get_node(root)
